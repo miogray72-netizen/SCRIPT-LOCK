@@ -1,0 +1,2 @@
+# SCRIPT-LOCK
+kkk

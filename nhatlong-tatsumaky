@@ -1,0 +1,661 @@
+--[[
+    NHATCO GLASS V3
+    Frozen WinPortal Tele
+    Roblox Studio - Own Experience
+
+    UI Icon: 128631229615006
+    Main Theme: 91587655521342
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local CONFIG = {
+    UI_ICON_ID = "rbxassetid://128631229615006",
+    MAIN_THEME_ID = "rbxassetid://91587655521342",
+
+    -- Bật true nếu muốn lấy vị trí trực tiếp từ WinPortal thay vì toạ độ cố định
+    FOLLOW_PORTAL_OBJECT = false,
+    PORTAL_PATH = { "DynamicObjects", "Worlds", "Frozen", "WinPortal" },
+
+    TARGET_CFRAME = CFrame.new(
+        1535.383,
+        106.378,
+        -270.41
+    ),
+
+    TELEPORT_INTERVAL = 0.15,
+    EGG_OPEN_INTERVAL = 0.2,
+    MIN_WINS_FOR_EGG = 30
+}
+
+local MAIN_EXPANDED_SIZE = UDim2.fromOffset(340, 342)
+local MAIN_MINIMIZED_SIZE = UDim2.fromOffset(340, 65)
+
+local enabled = false
+local holdWEnabled = false
+local autoEggEnabled = false
+local minimized = false
+local menuVisible = true
+
+-- Cleanup GUI cũ
+local previous = playerGui:FindFirstChild("NHATCO_GLASS_V3")
+if previous then
+    previous:Destroy()
+end
+
+-- Screen GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "NHATCO_GLASS_V3"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+-- Main frame
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = MAIN_EXPANDED_SIZE
+main.Position = UDim2.new(0.5, -170, 0.5, -171)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+main.BackgroundTransparency = 0.08
+main.BorderSizePixel = 0
+main.ClipsDescendants = true
+main.Parent = gui
+
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 16)
+
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(145, 145, 160)
+stroke.Transparency = 0.5
+stroke.Thickness = 1
+
+-- Theme
+local theme = Instance.new("ImageLabel")
+theme.Name = "MainTheme"
+theme.Size = UDim2.fromScale(1, 1)
+theme.BackgroundTransparency = 1
+theme.Image = CONFIG.MAIN_THEME_ID
+theme.ImageTransparency = 0.2
+theme.ScaleType = Enum.ScaleType.Crop
+theme.Parent = main
+
+Instance.new("UICorner", theme).CornerRadius = UDim.new(0, 16)
+
+-- Overlay
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.fromScale(1, 1)
+overlay.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+overlay.BackgroundTransparency = 0.22
+overlay.BorderSizePixel = 0
+overlay.Parent = main
+
+Instance.new("UICorner", overlay).CornerRadius = UDim.new(0, 16)
+
+-- Header
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 65)
+header.BackgroundTransparency = 1
+header.ZIndex = 2
+header.Parent = main
+
+local icon = Instance.new("ImageLabel")
+icon.Size = UDim2.fromOffset(42, 42)
+icon.Position = UDim2.fromOffset(13, 11)
+icon.BackgroundTransparency = 1
+icon.Image = CONFIG.UI_ICON_ID
+icon.Parent = header
+
+Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.Position = UDim2.fromOffset(65, 12)
+title.Size = UDim2.new(0, 180, 0, 23)
+title.BackgroundTransparency = 1
+title.Text = "NHATCO"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 18
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = header
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Position = UDim2.fromOffset(66, 35)
+subtitle.Size = UDim2.new(0, 180, 0, 15)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "FROZEN WINPORTAL TELE"
+subtitle.TextColor3 = Color3.fromRGB(185, 185, 195)
+subtitle.TextSize = 9
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = header
+
+-- Header buttons
+local function createButton(name, text, x)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Size = UDim2.fromOffset(27, 27)
+    button.Position = UDim2.new(1, x, 0, 17)
+    button.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    button.Text = text
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextSize = 16
+    button.Font = Enum.Font.GothamBold
+    button.Parent = header
+
+    Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+    return button
+end
+
+local minimizeButton = createButton("Minimize", "−", -68)
+local closeButton = createButton("Close", "×", -34)
+
+-- Divider
+local divider = Instance.new("Frame")
+divider.Position = UDim2.fromOffset(14, 65)
+divider.Size = UDim2.new(1, -28, 0, 1)
+divider.BackgroundColor3 = Color3.fromRGB(140, 140, 150)
+divider.BackgroundTransparency = 0.6
+divider.BorderSizePixel = 0
+divider.Parent = main
+
+-- Status
+local status = Instance.new("TextLabel")
+status.Position = UDim2.fromOffset(17, 74)
+status.Size = UDim2.new(1, -34, 0, 20)
+status.BackgroundTransparency = 1
+status.Text = "● SYSTEM READY"
+status.TextColor3 = Color3.fromRGB(190, 220, 195)
+status.TextSize = 11
+status.Font = Enum.Font.GothamMedium
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = main
+
+-- Coordinate information
+local coordinate = Instance.new("TextLabel")
+coordinate.Position = UDim2.fromOffset(17, 95)
+coordinate.Size = UDim2.new(1, -34, 0, 18)
+coordinate.BackgroundTransparency = 1
+coordinate.Text = "1535.383, 106.378, -270.41"
+coordinate.TextColor3 = Color3.fromRGB(185, 185, 195)
+coordinate.TextSize = 10
+coordinate.Font = Enum.Font.Gotham
+coordinate.TextXAlignment = Enum.TextXAlignment.Left
+coordinate.Parent = main
+
+-- Hiển thị số lượng Wins trực tiếp trên UI
+local winsLabel = Instance.new("TextLabel")
+winsLabel.Name = "WinsDisplay"
+winsLabel.Position = UDim2.fromOffset(17, 114)
+winsLabel.Size = UDim2.new(1, -34, 0, 18)
+winsLabel.BackgroundTransparency = 1
+winsLabel.Text = "★ WINS: 0  (EGG REQ: 30)"
+winsLabel.TextColor3 = Color3.fromRGB(255, 215, 110)
+winsLabel.TextSize = 11
+winsLabel.Font = Enum.Font.GothamBold
+winsLabel.TextXAlignment = Enum.TextXAlignment.Left
+winsLabel.Parent = main
+
+-- Chức năng 1: Auto Tele button
+local teleButton = Instance.new("TextButton")
+teleButton.Name = "AutoTele"
+teleButton.Position = UDim2.fromOffset(14, 142)
+teleButton.Size = UDim2.new(1, -28, 0, 40)
+teleButton.BackgroundColor3 = Color3.fromRGB(170, 55, 65)
+teleButton.Text = "AUTO TELE : OFF"
+teleButton.TextColor3 = Color3.new(1, 1, 1)
+teleButton.TextSize = 12
+teleButton.Font = Enum.Font.GothamBold
+teleButton.Parent = main
+
+Instance.new("UICorner", teleButton).CornerRadius = UDim.new(0, 9)
+
+-- Chức năng 2: Giữ nút W (tiến tới liên tục theo hướng camera)
+local holdWButton = Instance.new("TextButton")
+holdWButton.Name = "HoldW"
+holdWButton.Position = UDim2.fromOffset(14, 190)
+holdWButton.Size = UDim2.new(1, -28, 0, 38)
+holdWButton.BackgroundColor3 = Color3.fromRGB(50, 55, 72)
+holdWButton.Text = "HOLD W : OFF"
+holdWButton.TextColor3 = Color3.new(1, 1, 1)
+holdWButton.TextSize = 11
+holdWButton.Font = Enum.Font.GothamBold
+holdWButton.Parent = main
+
+Instance.new("UICorner", holdWButton).CornerRadius = UDim.new(0, 9)
+
+-- Chức năng 3: Auto Open Egg x10
+local autoEggButton = Instance.new("TextButton")
+autoEggButton.Name = "AutoOpenEggX10"
+autoEggButton.Position = UDim2.fromOffset(14, 236)
+autoEggButton.Size = UDim2.new(1, -28, 0, 38)
+autoEggButton.BackgroundColor3 = Color3.fromRGB(50, 55, 72)
+autoEggButton.Text = "AUTO OPEN EGG X10 : OFF"
+autoEggButton.TextColor3 = Color3.new(1, 1, 1)
+autoEggButton.TextSize = 11
+autoEggButton.Font = Enum.Font.GothamBold
+autoEggButton.Parent = main
+
+Instance.new("UICorner", autoEggButton).CornerRadius = UDim.new(0, 9)
+
+-- Footer
+local footer = Instance.new("TextLabel")
+footer.Position = UDim2.new(0, 0, 1, -25)
+footer.Size = UDim2.new(1, 0, 0, 16)
+footer.BackgroundTransparency = 1
+footer.Text = "NHATCO  •  GLASS V3"
+footer.TextColor3 = Color3.fromRGB(165, 165, 175)
+footer.TextSize = 9
+footer.Font = Enum.Font.Gotham
+footer.Parent = main
+
+-- Toggle button
+local menuButton = Instance.new("TextButton")
+menuButton.Name = "MenuToggle"
+menuButton.Size = UDim2.fromOffset(105, 35)
+menuButton.Position = UDim2.new(0, 15, 0.5, 145)
+menuButton.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+menuButton.Text = "NHATCO : ON"
+menuButton.TextColor3 = Color3.new(1, 1, 1)
+menuButton.TextSize = 11
+menuButton.Font = Enum.Font.GothamBold
+menuButton.Parent = gui
+
+Instance.new("UICorner", menuButton).CornerRadius = UDim.new(0, 9)
+
+-- Lấy số lượng Wins hiện tại của người chơi
+local function getPlayerWins()
+    local leaderstats = player:FindFirstChild("leaderstats")
+    if not leaderstats then
+        return 0, false
+    end
+
+    local winsValueObj = leaderstats:FindFirstChild("Wins")
+    if not winsValueObj then
+        return 0, false
+    end
+
+    local rawValue = winsValueObj.Value
+    local numericWins = tonumber(rawValue) or 0
+    return numericWins, true
+end
+
+-- Cập nhật hiển thị số lượng Wins lên UI
+local function refreshWinsUI()
+    if not winsLabel.Parent then
+        return
+    end
+
+    local wins, found = getPlayerWins()
+    if not found then
+        winsLabel.Text = "★ WINS: LOADING...  (EGG REQ: " .. CONFIG.MIN_WINS_FOR_EGG .. ")"
+        winsLabel.TextColor3 = Color3.fromRGB(185, 185, 195)
+        return
+    end
+
+    local enough = wins >= CONFIG.MIN_WINS_FOR_EGG
+    winsLabel.Text = string.format(
+        "★ WINS: %d  (%s)",
+        wins,
+        enough and "READY FOR EGG" or ("NEED " .. CONFIG.MIN_WINS_FOR_EGG)
+    )
+    winsLabel.TextColor3 = enough
+        and Color3.fromRGB(135, 235, 160)
+        or Color3.fromRGB(255, 195, 100)
+end
+
+-- Cập nhật dòng trạng thái tổng hợp
+local function updateStatusDisplay()
+    if not status.Parent then
+        return
+    end
+
+    local wins = getPlayerWins()
+    local enoughWins = wins >= CONFIG.MIN_WINS_FOR_EGG
+
+    local activeParts = {}
+    if enabled then
+        table.insert(activeParts, "TELE")
+    end
+    if holdWEnabled then
+        table.insert(activeParts, "HOLD W")
+    end
+    if autoEggEnabled then
+        if enoughWins then
+            table.insert(activeParts, "EGG X10")
+        else
+            table.insert(activeParts, string.format("EGG PAUSED (%d/%d WINS)", wins, CONFIG.MIN_WINS_FOR_EGG))
+        end
+    end
+
+    if #activeParts > 0 then
+        status.Text = "● " .. table.concat(activeParts, " + ")
+        if autoEggEnabled and not enoughWins then
+            status.TextColor3 = Color3.fromRGB(255, 185, 95)
+        else
+            status.TextColor3 = Color3.fromRGB(150, 230, 170)
+        end
+    else
+        status.Text = "● SYSTEM READY"
+        status.TextColor3 = Color3.fromRGB(190, 220, 195)
+    end
+end
+
+-- Lắng nghe thay đổi của leaderstats.Wins theo thời gian thực
+local winsChangedConn = nil
+local function bindWinsListener()
+    if winsChangedConn then
+        winsChangedConn:Disconnect()
+        winsChangedConn = nil
+    end
+
+    local leaderstats = player:FindFirstChild("leaderstats") or player:WaitForChild("leaderstats", 15)
+    if not leaderstats then
+        return
+    end
+
+    local winsObj = leaderstats:FindFirstChild("Wins") or leaderstats:WaitForChild("Wins", 15)
+    if not winsObj then
+        return
+    end
+
+    refreshWinsUI()
+    updateStatusDisplay()
+
+    winsChangedConn = winsObj.Changed:Connect(function()
+        refreshWinsUI()
+        updateStatusDisplay()
+    end)
+end
+
+task.spawn(bindWinsListener)
+
+-- Lấy Humanoid và HumanoidRootPart an toàn
+local function getCharacterRig()
+    local character = player.Character
+    if not character then
+        return nil, nil
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not root or humanoid.Health <= 0 then
+        return nil, nil
+    end
+
+    return humanoid, root
+end
+
+-- Nhả giữ W khi tắt hoặc huỷ GUI
+local function releaseHoldW()
+    local character = player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid:Move(Vector3.zero, false)
+    end
+end
+
+-- Hàm lấy CFrame của WinPortal nếu bật FOLLOW_PORTAL_OBJECT
+local function getPortalCFrame()
+    local current = workspace
+    for _, name in ipairs(CONFIG.PORTAL_PATH) do
+        current = current:FindFirstChild(name)
+        if not current then
+            return nil
+        end
+    end
+
+    if current:IsA("BasePart") then
+        return current.CFrame + Vector3.new(0, 3, 0)
+    elseif current:IsA("Model") then
+        return current:GetPivot() + Vector3.new(0, 3, 0)
+    end
+
+    return nil
+end
+
+-- Hàm dịch chuyển nhân vật
+local function teleportStep()
+    local humanoid, root = getCharacterRig()
+    if not humanoid or not root then
+        return false
+    end
+
+    local target = CONFIG.TARGET_CFRAME
+    if CONFIG.FOLLOW_PORTAL_OBJECT then
+        local portalCF = getPortalCFrame()
+        if portalCF then
+            target = portalCF
+        end
+    end
+
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = target
+    return true
+end
+
+-- Lấy RemoteFunction EggService
+local eggRemote = nil
+local function getEggRemote()
+    if eggRemote and eggRemote.Parent then
+        return eggRemote
+    end
+
+    local commonModules = ReplicatedStorage:FindFirstChild("CommonModules")
+    local systems = commonModules and commonModules:FindFirstChild("Systems")
+    local networkSystem = systems and systems:FindFirstChild("NetworkSystem")
+    local network = networkSystem and networkSystem:FindFirstChild("Network")
+    eggRemote = network and network:FindFirstChild("RemoteFunction")
+    return eggRemote
+end
+
+-- Gọi sự kiện mở Egg10 (chỉ gọi khi đủ >= 30 Wins)
+local EGG_PAYLOAD = {
+    {
+        name = "Egg10",
+        type = "Egg"
+    },
+    {
+        name = "Egg10",
+        type = "Egg"
+    },
+    {
+        name = "Egg10",
+        type = "Egg"
+    }
+}
+
+local function openEggStep()
+    local wins = getPlayerWins()
+    if wins < CONFIG.MIN_WINS_FOR_EGG then
+        return false
+    end
+
+    local remote = getEggRemote()
+    if not remote or not remote:IsA("RemoteFunction") then
+        return false
+    end
+
+    local ok = pcall(function()
+        remote:InvokeServer("EggService.open", EGG_PAYLOAD)
+    end)
+    return ok
+end
+
+-- Menu visibility toggle
+menuButton.Activated:Connect(function()
+    if not main.Parent then
+        return
+    end
+    menuVisible = not menuVisible
+    main.Visible = menuVisible
+    menuButton.Text = menuVisible and "NHATCO : ON" or "NHATCO : OFF"
+end)
+
+-- Minimize
+minimizeButton.Activated:Connect(function()
+    minimized = not minimized
+
+    local targetSize = minimized and MAIN_MINIMIZED_SIZE or MAIN_EXPANDED_SIZE
+
+    status.Visible = not minimized
+    coordinate.Visible = not minimized
+    winsLabel.Visible = not minimized
+    teleButton.Visible = not minimized
+    holdWButton.Visible = not minimized
+    autoEggButton.Visible = not minimized
+    footer.Visible = not minimized
+    divider.Visible = not minimized
+
+    minimizeButton.Text = minimized and "+" or "−"
+
+    TweenService:Create(
+        main,
+        TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { Size = targetSize }
+    ):Play()
+end)
+
+-- Close
+closeButton.Activated:Connect(function()
+    enabled = false
+    holdWEnabled = false
+    autoEggEnabled = false
+    if winsChangedConn then
+        winsChangedConn:Disconnect()
+        winsChangedConn = nil
+    end
+    releaseHoldW()
+    gui:Destroy()
+end)
+
+-- Auto Tele toggle
+teleButton.Activated:Connect(function()
+    enabled = not enabled
+
+    if enabled then
+        teleButton.Text = "AUTO TELE : ON"
+        teleButton.BackgroundColor3 = Color3.fromRGB(45, 155, 90)
+        teleportStep()
+    else
+        teleButton.Text = "AUTO TELE : OFF"
+        teleButton.BackgroundColor3 = Color3.fromRGB(170, 55, 65)
+    end
+    updateStatusDisplay()
+end)
+
+-- Hold W toggle
+holdWButton.Activated:Connect(function()
+    holdWEnabled = not holdWEnabled
+
+    if holdWEnabled then
+        holdWButton.Text = "HOLD W : ON"
+        holdWButton.BackgroundColor3 = Color3.fromRGB(45, 125, 175)
+    else
+        holdWButton.Text = "HOLD W : OFF"
+        holdWButton.BackgroundColor3 = Color3.fromRGB(50, 55, 72)
+        releaseHoldW()
+    end
+    updateStatusDisplay()
+end)
+
+-- Auto Open Egg x10 toggle
+autoEggButton.Activated:Connect(function()
+    autoEggEnabled = not autoEggEnabled
+
+    if autoEggEnabled then
+        autoEggButton.Text = "AUTO OPEN EGG X10 : ON"
+        autoEggButton.BackgroundColor3 = Color3.fromRGB(145, 95, 200)
+    else
+        autoEggButton.Text = "AUTO OPEN EGG X10 : OFF"
+        autoEggButton.BackgroundColor3 = Color3.fromRGB(50, 55, 72)
+    end
+    refreshWinsUI()
+    updateStatusDisplay()
+end)
+
+-- Duy trì trạng thái giữ W mỗi frame khi bật
+RunService.RenderStepped:Connect(function()
+    if not gui.Parent then
+        return
+    end
+    if holdWEnabled then
+        local humanoid = getCharacterRig()
+        if humanoid then
+            humanoid:Move(Vector3.new(0, 0, -1), true)
+        end
+    end
+end)
+
+-- Vòng lặp Auto Tele liên tục
+task.spawn(function()
+    while gui.Parent do
+        if enabled then
+            teleportStep()
+        end
+        task.wait(CONFIG.TELEPORT_INTERVAL)
+    end
+end)
+
+-- Vòng lặp Auto Open Egg x10 (tự động dừng nếu < 30 Wins và tự quay lại khi >= 30 Wins)
+task.spawn(function()
+    while gui.Parent do
+        if autoEggEnabled then
+            local wins = getPlayerWins()
+            if wins >= CONFIG.MIN_WINS_FOR_EGG then
+                openEggStep()
+                task.wait(CONFIG.EGG_OPEN_INTERVAL)
+            else
+                task.wait(0.25)
+            end
+        else
+            task.wait(0.15)
+        end
+    end
+end)
+
+-- Drag support
+local dragging = false
+local dragStart
+local startPosition
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+
+        dragging = true
+        dragStart = input.Position
+        startPosition = main.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+    ) then
+        local delta = input.Position - dragStart
+
+        main.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+print("[NHATCO] GLASS V3 INITIALIZED")
